@@ -1,7 +1,9 @@
 import { LoaderFunctionArgs, json } from '@remix-run/node'
-import { useLoaderData } from '@remix-run/react'
+import { Form, useActionData, useLoaderData } from '@remix-run/react'
+import { useRef } from 'react'
 
 import { storefrontAPI } from '~/storefrontAPI.server'
+import { supabase } from '~/supabaseClient.server'
 
 type Variant = {
   id: string
@@ -22,8 +24,37 @@ export async function loader({ params }: LoaderFunctionArgs) {
   return json({ productData })
 }
 
+export async function action({ request, params }: LoaderFunctionArgs) {
+  const formData = await request.formData()
+  const comment = String(formData.get('comment'))
+
+  const { data, error } = await supabase
+    .from('comments')
+    .insert([{ comment: comment, product_handle: params.productHandle }])
+    .select()
+
+  if (error) {
+    return json(
+      {
+        success: false,
+        error: 'Failed to leave feedback'
+      },
+      {
+        status: 500
+      }
+    )
+  } else {
+    console.log(JSON.stringify(data, null, 2))
+
+    return json({ success: true, error: null })
+  }
+}
+
 export default function ProductPage() {
   const { productData } = useLoaderData<typeof loader>()
+  const actionData = useActionData<typeof action>()
+
+  const formRef = useRef<HTMLFormElement>(null)
 
   return (
     <div
@@ -44,20 +75,39 @@ export default function ProductPage() {
         </li>
       ))}
 
-      <hr />
+      <hr className="mt-5" />
 
-      <Form method="post" className="mt-5 w-96">
+      {actionData?.error ? (
+        <div className="mt-5">
+          <em className="text-red-500">{actionData?.error}</em>
+        </div>
+      ) : null}
+
+      {actionData?.success ? (
+        <div className="mt-5">
+          <em className="text-green-500">Comment created successfully</em>
+        </div>
+      ) : null}
+
+      <Form
+        method="post"
+        className="mt-5 w-96"
+        ref={formRef}
+        onSubmit={() => {
+          formRef.current?.reset()
+        }}
+      >
         <div className="mb-4">
           <label
             className="block text-gray-700 text-sm font-bold mb-2"
-            htmlFor="message"
+            htmlFor="comment"
           >
-            Message
+            Comment
           </label>
           <textarea
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            id="message"
-            name="message"
+            id="comment"
+            name="comment"
             placeholder="Lorem ipsum dolor sit amet, consectetur adipiscing elit."
           />
         </div>
